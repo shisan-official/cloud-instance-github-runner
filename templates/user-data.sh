@@ -89,6 +89,19 @@ else
   echo "Proxy configuration not provided, using direct connection"
 fi
 
+# 【先把自动安全更新关掉,再装任何东西】Ubuntu 云镜像开机几分钟后会自己跑一次
+# unattended-upgrades。它升到 libc / systemd 那几个包时会【重启 systemd-resolved
+# 与 systemd-networkd】,而 /etc/resolv.conf 指着 127.0.0.53 —— 重启的那几秒里
+# 没人在听那个端口,任何 DNS 查询直接 connection refused。job 于是随机地在
+# 「go install」「npm ci」这类地方炸掉,报的是网络错,查起来像抖动。
+# 实测 2026-09-07:实例开机 4 分钟后 unattended-upgrades 升了 libc-bin 与
+# libgcrypt20,resolved 在 21:02:51 与 21:03:14 各重启一次,一个 go install 正好
+# 落在窗口里。一次性实例活不过半小时,自动打补丁在这里【没有任何收益】。
+# 顺带也免掉它和下面 apt-get install 抢 dpkg 锁。
+echo "=== Disabling unattended upgrades (ephemeral instance, patching has no value here) ==="
+systemctl disable --now unattended-upgrades.service apt-daily.timer apt-daily-upgrade.timer > /dev/null 2>&1 || true
+systemctl stop apt-daily.service apt-daily-upgrade.service > /dev/null 2>&1 || true
+
 # Update system
 echo "=== Updating system ==="
 if command -v yum &> /dev/null; then
