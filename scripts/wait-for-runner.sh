@@ -8,7 +8,9 @@ set -euo pipefail
 # Get parameters from environment variables
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-}"
-RUNNER_NAME="${RUNNER_NAME:-}"
+# 【读 SPOT_RUNNER_NAME 而不是 RUNNER_NAME】后者是 Actions runner 注入的默认变量,
+# 值是宿主 agent 自己的名字,自托管 runner 上会把这里覆盖掉。
+RUNNER_NAME="${SPOT_RUNNER_NAME:-}"
 TIMEOUT="${TIMEOUT:-120}"  # Default timeout 120 seconds
 INTERVAL="${INTERVAL:-10}"  # Default polling interval 10 seconds
 
