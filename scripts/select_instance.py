@@ -272,14 +272,36 @@ def filter_instances(
 
 
 def get_vswitch_id(zone_id: str) -> str | None:
-    """Get VSwitch ID based on zone ID"""
-    # Extract suffix from zone ID (e.g., cn-hangzhou-k -> K)
-    match = re.search(r"-([a-z])$", zone_id)
-    if not match:
+    """Get VSwitch ID based on zone ID.
+
+    Zone ids come in two shapes:
+
+      cn-beijing-a, cn-hongkong-b   region, hyphen, letter
+      us-west-1a, ap-southeast-1a   numbered region, letter with no hyphen
+
+    The original implementation matched only `-([a-z])$`, so every numbered
+    region resolved to None. The caller then reported "No instances found with
+    VSwitch ID configured", which points at the configuration when the real
+    problem is that the zone id could not be parsed at all, and no combination
+    of ALIYUN_VSWITCH_ID_* values can fix it.
+
+    Deriving the suffix by stripping the region id handles both shapes. The
+    old regex stays as the fallback for the case where ALIYUN_REGION_ID is
+    absent or does not prefix the zone id.
+    """
+    region_id = os.environ.get("ALIYUN_REGION_ID", "").strip()
+    if region_id and zone_id.startswith(region_id):
+        zone_suffix = zone_id[len(region_id) :].lstrip("-")
+    else:
+        match = re.search(r"-([a-z])$", zone_id)
+        if not match:
+            return None
+        zone_suffix = match.group(1)
+
+    if not zone_suffix:
         return None
 
-    zone_suffix = match.group(1).upper()
-    vswitch_var = f"ALIYUN_VSWITCH_ID_{zone_suffix}"
+    vswitch_var = f"ALIYUN_VSWITCH_ID_{zone_suffix.upper()}"
     return os.environ.get(vswitch_var)
 
 
