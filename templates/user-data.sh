@@ -344,9 +344,15 @@ cat > /usr/local/bin/runner-watchdog.sh << 'WATCHDOG_EOF'
 BOOTSTRAP_WATCH_TIMEOUT="${BOOTSTRAP_WATCH_TIMEOUT:-1800}"
 # Phase-2 stop verdict: consecutive confirmed-inactive probes required before
 # self-destruction; any active probe resets the streak. Default
-# 6 x POLL_INTERVAL_SECONDS(5s) = 30s window; overridable via environment,
+# 24 x POLL_INTERVAL_SECONDS(5s) = 2min window; overridable via environment,
 # validated at user-data bootstrap time.
-STOP_CONFIRMATIONS_REQUIRED="${STOP_CONFIRMATIONS_REQUIRED:-6}"
+# 【24 而不是 6】6 x 5s = 30s 太紧:runner 版本落后于 GitHub 当前版时,
+# 它在接到 job 那一刻【自更新】,而自更新要重启服务。经 NAT 出境下 200MB 再解包
+# 常常超过 30 秒 —— 于是 watchdog 在 job 正跑着的时候判「跑完了」并删实例,
+# job 以「received a shutdown signal」告终,看着像基础设施抖动。
+# 24 x 5s = 2 分钟。放宽的代价被 AutoReleaseTime(instance_ttl_minutes)兜住:
+# 最坏是多空转一会儿,不是漏一台。
+STOP_CONFIRMATIONS_REQUIRED="${STOP_CONFIRMATIONS_REQUIRED:-24}"
 POLL_INTERVAL_SECONDS=5
 SELF_DESTRUCT_SCRIPT="/usr/local/bin/self-destruct.sh"
 
