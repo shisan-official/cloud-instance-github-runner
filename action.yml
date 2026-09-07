@@ -398,34 +398,40 @@ runs:
         ALIYUN_VSWITCH_ID_Z: ${{ inputs.vswitch_id_z }}
         USER_DATA_B64: ${{ steps.user-data.outputs.user_data_b64 }}
       run: |
-        python3 ${{ github.action_path }}/scripts/write_user_data.py /tmp/user-data.sh
-        export USER_DATA_FILE=/tmp/user-data.sh
+        # 【不许用 /tmp 下的固定文件名】一台自托管调度机上跑着好几个 agent,它们
+        # 共用同一个 /tmp。两个 job 同一秒走到这里时,后写的 user-data.sh 会盖掉先写的,
+        # 于是一台实例带着【另一个 job 的 runner 名字和 label】开机,等它的那个 job
+        # 永远等不到自己的 runner,最后撞 timeout-minutes。托管 runner 一 job 一台机器,
+        # 所以这个坑只在自托管上现形。RUNNER_TEMP 是每个 agent 自己的 _work/_temp。
+        WORK="${RUNNER_TEMP:-/tmp}"
+        python3 ${{ github.action_path }}/scripts/write_user_data.py "${WORK}/user-data.sh"
+        export USER_DATA_FILE="${WORK}/user-data.sh"
         export DEBUG=true
-        python3 ${{ github.action_path }}/scripts/create_spot_instance.py > /tmp/instance-id.txt 2> /tmp/aliyun-error.log || {
+        python3 ${{ github.action_path }}/scripts/create_spot_instance.py > "${WORK}/instance-id.txt" 2> "${WORK}/aliyun-error.log" || {
           EXIT_CODE=$?
           echo "Error: Failed to create instance (exit code: ${EXIT_CODE})"
           echo "=== Error Output ==="
-          cat /tmp/aliyun-error.log
+          cat "${WORK}/aliyun-error.log"
           echo "=== Standard Output ==="
-          cat /tmp/instance-id.txt
+          cat "${WORK}/instance-id.txt"
           exit ${EXIT_CODE}
         }
         EXIT_CODE=$?
         if [[ ${EXIT_CODE} -ne 0 ]]; then
           echo "Error: Failed to create instance (exit code: ${EXIT_CODE})"
           echo "=== Error Output ==="
-          cat /tmp/aliyun-error.log
+          cat "${WORK}/aliyun-error.log"
           echo "=== Standard Output ==="
-          cat /tmp/instance-id.txt
+          cat "${WORK}/instance-id.txt"
           exit ${EXIT_CODE}
         fi
-        INSTANCE_ID=$(cat /tmp/instance-id.txt | tail -1)
+        INSTANCE_ID=$(cat "${WORK}/instance-id.txt" | tail -1)
         if [[ -z "${INSTANCE_ID}" ]]; then
           echo "Error: Failed to extract instance ID"
           echo "=== Standard Output ==="
-          cat /tmp/instance-id.txt
+          cat "${WORK}/instance-id.txt"
           echo "=== Error Output ==="
-          cat /tmp/aliyun-error.log
+          cat "${WORK}/aliyun-error.log"
           exit 1
         fi
         echo "instance_id=${INSTANCE_ID}" >> $GITHUB_OUTPUT
@@ -455,7 +461,7 @@ runs:
         ALIYUN_ACCESS_KEY_SECRET: ${{ inputs.aliyun_access_key_secret }}
         ALIYUN_REGION_ID: ${{ inputs.aliyun_region_id }}
         INSTANCE_ID: ${{ steps.create-instance.outputs.instance_id }}
-        CONSOLE_LOG_FILE: /tmp/instance-console.log
+        CONSOLE_LOG_FILE: ${{ runner.temp }}/instance-console.log
       run: |
         if [[ -n "${INSTANCE_ID}" ]]; then
           # Forensics before destruction: the console output only survives
@@ -472,5 +478,5 @@ runs:
         # When creation never produced an instance ID, GitHub renders an
         # empty string here; if-no-files-found: ignore keeps that harmless.
         name: instance-console-${{ steps.create-instance.outputs.instance_id }}
-        path: /tmp/instance-console.log
+        path: ${{ runner.temp }}/instance-console.log
         if-no-files-found: ignore
