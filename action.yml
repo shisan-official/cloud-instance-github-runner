@@ -332,7 +332,11 @@ runs:
         TEMPLATE_FILE: ${{ github.action_path }}/templates/user-data.sh
         RUNNER_REGISTRATION_TOKEN: ${{ steps.get-token.outputs.result }}
         GITHUB_REPOSITORY: ${{ github.repository }}
-        RUNNER_NAME: ${{ steps.runner-name.outputs.name }}
+        # 【不能叫 RUNNER_NAME】Actions runner 把 RUNNER_NAME 作为默认变量注入每个 step,
+        # 值是【执行这个 job 的 agent 自己的名字】,而 step 级 env 盖不过注入的默认变量。
+        # 用同一个名字传「新实例该注册成什么」时,自托管 runner 上拿到的是宿主 agent 的名字,
+        # 新实例于是 config.sh --replace 把宿主的注册顶掉。改成 runner 不认识的名字。
+        SPOT_RUNNER_NAME: ${{ steps.runner-name.outputs.name }}
         RUNNER_LABELS: ${{ inputs.runner_labels }}
         RUNNER_VERSION: ${{ inputs.runner_version }}
         HTTP_PROXY: ${{ inputs.http_proxy }}
@@ -433,7 +437,11 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
-        RUNNER_NAME: ${{ steps.runner-name.outputs.name }}
+        # 【不能叫 RUNNER_NAME】Actions runner 把 RUNNER_NAME 作为默认变量注入每个 step,
+        # 值是【执行这个 job 的 agent 自己的名字】,而 step 级 env 盖不过注入的默认变量。
+        # 用同一个名字传「新实例该注册成什么」时,自托管 runner 上拿到的是宿主 agent 的名字,
+        # 新实例于是 config.sh --replace 把宿主的注册顶掉。改成 runner 不认识的名字。
+        SPOT_RUNNER_NAME: ${{ steps.runner-name.outputs.name }}
         TIMEOUT: ${{ inputs.runner_wait_timeout }}
         INTERVAL: 10
       run: |
