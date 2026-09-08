@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Masked the runner registration token with core.setSecret. A token minted at run time is not one of the workflow's configured secrets, so it was printed in clear text by every later step that carried it through env:
+
 ## [1.5.1] - 2026-09-04
 
 ### Added
