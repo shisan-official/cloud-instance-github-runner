@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Renamed the env var carrying the new instance's runner name to SPOT_RUNNER_NAME. RUNNER_NAME is injected into every step by the Actions runner with the host agent's own name and cannot be overridden at step level, so on a self-hosted runner the instance registered under the host agent name and config.sh --replace took over its registration
+
 ## [1.5.1] - 2026-09-04
 
 ### Added
