@@ -89,6 +89,19 @@ else
   echo "Proxy configuration not provided, using direct connection"
 fi
 
+# Disable the automatic security upgrade before installing anything. The Ubuntu
+# cloud image runs unattended-upgrades a few minutes after boot; upgrading libc
+# or systemd restarts systemd-resolved and systemd-networkd, and resolv.conf
+# points at the 127.0.0.53 stub, so every DNS lookup made during those seconds
+# fails with connection refused. The job sees a network error from whatever it
+# happened to be doing, which reads as flakiness rather than as a scheduled
+# task. An instance that is deleted after one job has nothing to gain from
+# being patched, and disabling the timers also keeps the upgrade from competing
+# for the dpkg lock with the package installs below.
+echo "=== Disabling unattended upgrades (ephemeral instance, patching has no value here) ==="
+systemctl disable --now unattended-upgrades.service apt-daily.timer apt-daily-upgrade.timer > /dev/null 2>&1 || true
+systemctl stop apt-daily.service apt-daily-upgrade.service > /dev/null 2>&1 || true
+
 # Update system
 echo "=== Updating system ==="
 if command -v yum &> /dev/null; then
@@ -308,7 +321,7 @@ trap on_user_data_exit EXIT
 # triggers self-destruct (loud, no residual instance). Validating inside the
 # watchdog instead would loop its Restart=on-failure into start-limit and
 # silently kill the dead-man switch. A missing key is the legal "no override
-# expressed" path: the watchdog default (STOP_CONFIRMATIONS_REQUIRED:-6)
+# expressed" path: the watchdog default (STOP_CONFIRMATIONS_REQUIRED:-24)
 # applies, not a silent fallback.
 STOP_CONFIRMATIONS_REQUIRED_RAW=""
 if grep -q '^STOP_CONFIRMATIONS_REQUIRED=' /etc/environment 2>/dev/null; then
@@ -344,9 +357,17 @@ cat > /usr/local/bin/runner-watchdog.sh << 'WATCHDOG_EOF'
 BOOTSTRAP_WATCH_TIMEOUT="${BOOTSTRAP_WATCH_TIMEOUT:-1800}"
 # Phase-2 stop verdict: consecutive confirmed-inactive probes required before
 # self-destruction; any active probe resets the streak. Default
-# 6 x POLL_INTERVAL_SECONDS(5s) = 30s window; overridable via environment,
+# 24 x POLL_INTERVAL_SECONDS(5s) = 2min window; overridable via environment,
 # validated at user-data bootstrap time.
-STOP_CONFIRMATIONS_REQUIRED="${STOP_CONFIRMATIONS_REQUIRED:-6}"
+# 24 rather than 6: at 6 the window is 30s, and a runner older than the
+# version GitHub currently serves updates itself the moment a job arrives,
+# which restarts the service. Downloading and unpacking the new runner through
+# a NAT gateway passes 30s often enough that the watchdog reaches its verdict
+# and deletes the instance mid-job; the job ends with a shutdown signal, which
+# reads as infrastructure flakiness rather than as the dead-man switch firing.
+# The cost of the wider window stays bounded by AutoReleaseTime
+# (instance_ttl_minutes): the worst case is a longer idle instance, not a leak.
+STOP_CONFIRMATIONS_REQUIRED="${STOP_CONFIRMATIONS_REQUIRED:-24}"
 POLL_INTERVAL_SECONDS=5
 SELF_DESTRUCT_SCRIPT="/usr/local/bin/self-destruct.sh"
 

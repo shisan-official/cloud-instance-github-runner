@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Masked the runner registration token with core.setSecret. A token minted at run time is not one of the workflow's configured secrets, so it was printed in clear text by every later step that carried it through env:
 - Renamed the env var carrying the new instance's runner name to SPOT_RUNNER_NAME. RUNNER_NAME is injected into every step by the Actions runner with the host agent's own name and cannot be overridden at step level, so on a self-hosted runner the instance registered under the host agent name and config.sh --replace took over its registration
 - Moved the action's scratch files (user-data, instance id, error log, console log) from fixed /tmp names to RUNNER_TEMP. Several runner agents on one self-hosted host share /tmp, so two concurrent jobs overwrote each other's user-data and one instance booted with the other job's runner name and labels
+- Widened the watchdog stop verdict from 6 to 24 consecutive confirmed-inactive probes (30s to 2min). A runner older than the version GitHub serves self-updates when a job arrives, and the service restart could outlast the 30s window, so the watchdog destroyed the instance mid-job (blueprint watchdog-hardening v1.1)
+- Disabled unattended-upgrades and the apt-daily timers on the instance. The automatic security upgrade restarted systemd-resolved a few minutes into the instance's life, and every DNS lookup during those seconds failed with connection refused, surfacing as random network errors inside the job
 
 ## [1.5.1] - 2026-09-04
 
